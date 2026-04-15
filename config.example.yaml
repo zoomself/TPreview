@@ -1,0 +1,26 @@
+# Copy to config.yaml and adjust. (config.yaml is gitignored for local overrides;
+# GitHub Actions uses this file if config.yaml is absent — see workflow.)
+
+# Inclusive date range for initial / catch-up download (YYYY-MM-DD).
+start_date: "2026-03-01"
+# Use "today" for the run date in Asia/Shanghai, or a fixed YYYY-MM-DD.
+end_date: "today"
+
+# Baostock adjustflag: 3 不复权, 2 前复权, 1 后复权
+adjustflag: "3"
+
+# Report: minimum consecutive down days (close[t] < close[t-1]) ending on latest bar.
+min_streak_days: 5
+
+# Report: "one month" ≈ trading days lookback for total return.
+lookback_trading_days: 30
+
+# Optional small delay between tickers (seconds) to reduce throttling.
+request_sleep_sec: 0.05
+
+# Directories (relative to repo root)
+data_dir: "data"
+daily_subdir: "daily"
+meta_subdir: "meta"
+docs_dir: "docs"
+template_path: "templates/report.html.j2"

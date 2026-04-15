@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A 股连续下跌筛选（Baostock 本地数据）</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #9aa7b2;
+      --accent: #5b8cff;
+      --border: #2a3545;
+      --down: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+    }
+    header {
+      padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #15202b 0%, var(--bg) 100%);
+    }
+    h1 { margin: 0 0 0.35rem; font-size: 1.35rem; font-weight: 650; }
+    .meta { color: var(--muted); font-size: 0.9rem; }
+    main { padding: 1rem 1.25rem 2.5rem; max-width: 1200px; margin: 0 auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { padding: 0.55rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:hover td { background: rgba(91, 140, 255, 0.06); }
+    .num { font-variant-numeric: tabular-nums; text-align: right; }
+    .pct { font-variant-numeric: tabular-nums; text-align: right; }
+    .neg { color: var(--down); }
+    details.sub { margin: 0.35rem 0 0; }
+    details.sub summary {
+      cursor: pointer; color: var(--accent); font-size: 0.85rem; user-select: none;
+    }
+    .inner { margin: 0.5rem 0 0.75rem; padding: 0.5rem 0.65rem; background: var(--panel); border-radius: 8px; border: 1px solid var(--border); }
+    .inner table { font-size: 0.82rem; }
+    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; background: #2f3b4d; color: var(--muted); }
+    footer { padding: 1rem 1.5rem; color: var(--muted); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    .empty { color: var(--muted); padding: 2rem 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>连续下跌 ≥ 5 天（截至最新本地数据）</h1>
+    <div class="meta">
+      生成时间：2026-04-15 11:27:18 CST · 配置的数据结束日：2026-04-15 ·
+      近一月口径：20 个交易日涨跌幅
+    </div>
+  </header>
+  <main>
+    
+      <p class="empty">暂无符合条件的股票，或尚未运行同步脚本生成 <code>data/</code>。</p>
+    
+  </main>
+  <footer>
+    数据来源于 Baostock；ST 标记为基于证券简称的启发式规则，非交易所官方字段。仅供学习研究，不构成投资建议。
+  </footer>
+</body>
+</html>
