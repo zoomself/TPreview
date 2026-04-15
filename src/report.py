@@ -73,10 +73,39 @@ def _month_return(closes: pd.Series, lookback: int) -> float | None:
     return (b / a - 1.0) * 100.0
 
 
-def _row_to_ctx(r: ReportRow) -> dict[str, Any]:
+def _row_to_ctx(r: ReportRow, *, streak_bg: str) -> dict[str, Any]:
     d = asdict(r)
     d["details"] = [asdict(x) for x in r.details]
+    d["streak_bg"] = streak_bg
+    d["stock_title"] = f"{r.stock_name}（{r.code}）"
     return d
+
+
+# Light tints for dark theme (same streak_days → same entry via mapping below).
+_STREAK_TINT_BASE: list[tuple[int, int, int]] = [
+    (110, 168, 255),
+    (130, 210, 175),
+    (230, 190, 120),
+    (200, 150, 230),
+    (120, 210, 220),
+    (230, 160, 175),
+    (180, 200, 130),
+    (160, 175, 235),
+    (220, 175, 130),
+    (140, 195, 200),
+    (210, 145, 200),
+    (175, 205, 155),
+]
+
+
+def _streak_background_map(streak_days_list: list[int]) -> dict[int, str]:
+    """Same streak_days → same soft tint; different天数在调色板中轮换。"""
+    unique = sorted(set(streak_days_list), reverse=True)
+    out: dict[int, str] = {}
+    for i, d in enumerate(unique):
+        r, g, b = _STREAK_TINT_BASE[i % len(_STREAK_TINT_BASE)]
+        out[d] = f"rgba({r},{g},{b},0.14)"
+    return out
 
 
 def build_rows(cfg: AppConfig) -> tuple[list[ReportRow], str]:
@@ -89,6 +118,7 @@ def build_rows(cfg: AppConfig) -> tuple[list[ReportRow], str]:
     meta = pd.read_csv(stocks_path, dtype=str)
     meta = meta.fillna("")
     name_by_code = dict(zip(meta["code"].astype(str), meta["code_name"].astype(str)))
+    st_by_code = dict(zip(meta["code"].astype(str), meta.get("is_st", "0").astype(str)))
 
     rows: list[ReportRow] = []
     data_as_of = ""
@@ -110,6 +140,8 @@ def build_rows(cfg: AppConfig) -> tuple[list[ReportRow], str]:
             continue
         streak_days, anchor_idx, details = _trailing_down_streak(df)
         if streak_days < cfg.min_streak_days:
+            continue
+        if str(st_by_code.get(code, "0")).strip() in {"1", "1.0"}:
             continue
         c_anchor = float(closes.iloc[anchor_idx])
         c_last = float(closes.iloc[-1])
@@ -147,8 +179,9 @@ def render_report(
     )
     tpl = env.get_template(cfg.template_file().name)
     now_sh = datetime.now(TZ_SH).strftime("%Y-%m-%d %H:%M:%S %Z")
+    bg_map = _streak_background_map([r.streak_days for r in rows])
     html = tpl.render(
-        rows=[_row_to_ctx(r) for r in rows],
+        rows=[_row_to_ctx(r, streak_bg=bg_map[r.streak_days]) for r in rows],
         generated_at=now_sh,
         data_end_date=data_as_of or cfg.resolved_end_date(),
         min_streak_days=cfg.min_streak_days,

@@ -13,8 +13,8 @@
       --accent: #5b8cff;
       --border: #2a3545;
       --down: #ff6b6b;
-      /* 与 summary 列对齐：名称 | 代码 | 收盘 | 连跌天 | 连跌总 | 近N日 | 操作 */
-      --row-grid: minmax(5.5rem, 1.35fr) minmax(4.5rem, 0.62fr) minmax(4rem, 0.52fr) minmax(2.75rem, 0.38fr) minmax(4.25rem, 0.52fr) minmax(4.25rem, 0.52fr) minmax(5rem, 0.72fr);
+      /* 名称(含代码) | 收盘 | 连跌天 | 连跌总 | 近N日 | 操作 */
+      --row-grid: minmax(7rem, 2.1fr) minmax(4rem, 0.52fr) minmax(2.75rem, 0.38fr) minmax(4.25rem, 0.52fr) minmax(4.25rem, 0.52fr) minmax(5rem, 0.72fr);
     }
     * { box-sizing: border-box; }
     body {
@@ -48,11 +48,10 @@
     details.stock-card {
       border: 1px solid var(--border);
       border-radius: 10px;
-      background: rgba(26, 35, 50, 0.45);
+      background: rgba(26, 35, 50, 0.35);
       overflow: hidden;
     }
     details.stock-card:hover { border-color: #3d4f66; }
-    details.stock-card[open] { background: rgba(26, 35, 50, 0.75); }
 
     details.stock-card > summary {
       display: grid;
@@ -63,13 +62,21 @@
       cursor: pointer;
       list-style: none;
       font-size: 0.9rem;
+      /* 浅色色块：由行内 --streak-tint 提供 */
+      background: var(--streak-tint, rgba(26, 35, 50, 0.25));
     }
     details.stock-card > summary::-webkit-details-marker { display: none; }
-    summary .name {
+    summary .name-line {
       font-weight: 600;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    summary .code-inline {
+      font-weight: 500;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-variant-numeric: tabular-nums;
     }
     summary .chev {
       text-align: right;
@@ -79,15 +86,6 @@
     }
     details.stock-card[open] summary .chev { color: var(--muted); }
 
-    .badge {
-      display: inline-block;
-      padding: 0.12rem 0.42rem;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      background: #2f3b4d;
-      color: var(--muted);
-      font-variant-numeric: tabular-nums;
-    }
     .num { font-variant-numeric: tabular-nums; text-align: right; }
     .pct { font-variant-numeric: tabular-nums; text-align: right; }
     .neg { color: var(--down); }
@@ -135,7 +133,7 @@
         gap: 0.45rem 0.85rem;
         align-items: baseline;
       }
-      summary .name { width: 100%; white-space: normal; }
+      summary .name-line { width: 100%; white-space: normal; }
       summary .chev { width: 100%; text-align: left; margin-top: 0.15rem; font-size: 0.8rem; }
     }
   </style>
@@ -145,7 +143,7 @@
     <h1>连续下跌 ≥ {{ min_streak_days }} 天（截至最新本地数据）</h1>
     <div class="meta">
       生成时间：{{ generated_at }} · 配置的数据结束日：{{ data_end_date or "—" }} ·
-      近一月口径：{{ lookback_trading_days }} 个交易日涨跌幅
+      近一月口径：{{ lookback_trading_days }} 个交易日涨跌幅 · 已排除 ST 类证券
     </div>
   </header>
   <main>
@@ -154,8 +152,7 @@
     {% else %}
       <div class="report-list" role="list">
         <div class="report-head" aria-hidden="true">
-          <span>股票名称</span>
-          <span>代码</span>
+          <span>股票（含代码）</span>
           <span class="num">最新收盘</span>
           <span class="num">连跌天数</span>
           <span class="pct">连跌总跌幅</span>
@@ -163,10 +160,9 @@
           <span class="rh-hint">明细</span>
         </div>
         {% for r in rows %}
-        <details class="stock-card" role="listitem">
+        <details class="stock-card" role="listitem" style="--streak-tint: {{ r.streak_bg }};">
           <summary>
-            <span class="name" title="{{ r.stock_name }}">{{ r.stock_name }}</span>
-            <span class="cell-code"><span class="badge">{{ r.code }}</span></span>
+            <span class="name-line" title="{{ r.stock_title }}">{{ r.stock_name }}<span class="code-inline">（{{ r.code }}）</span></span>
             <span class="num cell-close">{{ "%.3f"|format(r.latest_close) }}</span>
             <span class="num cell-streak">{{ r.streak_days }}</span>
             <span class="pct neg cell-stpct">{{ "%.2f"|format(r.streak_total_pct) }}%</span>
@@ -181,7 +177,7 @@
           </summary>
           <div class="card-body">
             <div class="card-body-inner">
-              <table aria-label="{{ r.stock_name }} 连跌明细">
+              <table aria-label="{{ r.stock_title }} 连跌明细">
                 <thead>
                   <tr>
                     <th>日期</th>
@@ -207,7 +203,7 @@
     {% endif %}
   </main>
   <footer>
-    数据来源于 Baostock。仅供学习研究，不构成投资建议。
+    数据来源于 Baostock；列表不含 ST 类证券。仅供学习研究，不构成投资建议。
   </footer>
 </body>
 </html>
