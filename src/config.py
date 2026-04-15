@@ -30,6 +30,8 @@ class AppConfig:
     min_streak_days: int
     lookback_trading_days: int
     request_sleep_sec: float
+    # Keep daily rows with date >= (latest in file) - N calendar days; 0 = disable.
+    data_retention_days: int
     data_dir: str
     daily_subdir: str
     meta_subdir: str
@@ -74,6 +76,7 @@ DEFAULTS: dict[str, Any] = {
     "min_streak_days": 5,
     "lookback_trading_days": 20,
     "request_sleep_sec": 0.05,
+    "data_retention_days": 62,
     "data_dir": "data",
     "daily_subdir": "daily",
     "meta_subdir": "meta",
@@ -106,6 +109,7 @@ def load_config() -> AppConfig:
         min_streak_days=int(merged["min_streak_days"]),
         lookback_trading_days=int(merged["lookback_trading_days"]),
         request_sleep_sec=float(merged["request_sleep_sec"]),
+        data_retention_days=int(merged["data_retention_days"]),
         data_dir=str(merged["data_dir"]),
         daily_subdir=str(merged["daily_subdir"]),
         meta_subdir=str(merged["meta_subdir"]),

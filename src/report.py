@@ -32,7 +32,6 @@ class DayDetail:
 class ReportRow:
     stock_name: str
     code: str
-    is_st: str
     latest_close: float
     streak_days: int
     streak_total_pct: float
@@ -90,7 +89,6 @@ def build_rows(cfg: AppConfig) -> tuple[list[ReportRow], str]:
     meta = pd.read_csv(stocks_path, dtype=str)
     meta = meta.fillna("")
     name_by_code = dict(zip(meta["code"].astype(str), meta["code_name"].astype(str)))
-    st_by_code = dict(zip(meta["code"].astype(str), meta.get("is_st", "0").astype(str)))
 
     rows: list[ReportRow] = []
     data_as_of = ""
@@ -118,12 +116,10 @@ def build_rows(cfg: AppConfig) -> tuple[list[ReportRow], str]:
         streak_total = (c_last / c_anchor - 1.0) * 100.0 if c_anchor else 0.0
         m20 = _month_return(closes, cfg.lookback_trading_days)
         disp_name = name_by_code.get(code, code)
-        is_st = "是" if str(st_by_code.get(code, "0")) == "1" else "否"
         rows.append(
             ReportRow(
                 stock_name=str(disp_name),
                 code=code,
-                is_st=is_st,
                 latest_close=c_last,
                 streak_days=streak_days,
                 streak_total_pct=streak_total,

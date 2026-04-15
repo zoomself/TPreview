@@ -112,6 +112,26 @@ def fetch_k_range(code: str, start_date: str, end_date: str, adjustflag: str) ->
     return pd.DataFrame(rows, columns=rs.fields)
 
 
+def trim_daily_dataframe(df: pd.DataFrame, retention_days: int) -> pd.DataFrame:
+    """
+    Keep rows with date >= (max date in df) - retention_days (calendar days).
+    Dates are YYYY-MM-DD strings; anchor is the last row's date, not wall-clock today.
+    """
+    if retention_days <= 0 or df.empty or "date" not in df.columns:
+        return df
+    work = df.sort_values("date").copy()
+    work["date"] = work["date"].astype(str).str[:10]
+    last_s = str(work["date"].iloc[-1])
+    try:
+        last_d = datetime.strptime(last_s, "%Y-%m-%d").date()
+    except ValueError:
+        return df
+    cutoff = last_d - timedelta(days=int(retention_days))
+    cutoff_s = cutoff.strftime("%Y-%m-%d")
+    trimmed = work[work["date"] >= cutoff_s].reset_index(drop=True)
+    return trimmed
+
+
 def merge_daily_csv(existing: Path | None, new_df: pd.DataFrame) -> pd.DataFrame:
     if new_df.empty:
         if existing and existing.is_file():
@@ -127,6 +147,29 @@ def merge_daily_csv(existing: Path | None, new_df: pd.DataFrame) -> pd.DataFrame
         merged = merged.sort_values("date")
         return merged
     return new_df.sort_values("date")
+
+
+def _apply_retention_to_universe(daily_dir: Path, stocks: pd.DataFrame, retention_days: int) -> None:
+    """Trim every listed stock's CSV; also shrinks files that were skipped in the fetch loop."""
+    if retention_days <= 0:
+        return
+    n_trimmed = 0
+    for _, row in stocks.iterrows():
+        code = str(row["code"])
+        path = daily_csv_path(daily_dir, code)
+        if not path.is_file():
+            continue
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            LOG.debug("Retention skip %s: %s", path, e)
+            continue
+        trimmed = trim_daily_dataframe(df, retention_days)
+        if len(trimmed) < len(df):
+            trimmed.to_csv(path, index=False, encoding="utf-8-sig")
+            n_trimmed += 1
+    if n_trimmed:
+        LOG.info("Retention: rewrote %d daily CSV(s) (>%d days dropped before latest bar).", n_trimmed, retention_days)
 
 
 def is_trading_day(d: str) -> bool:
@@ -178,11 +221,15 @@ def run_sync() -> int:
         stocks.to_csv(stocks_path, index=False, encoding="utf-8-sig")
         LOG.info("Wrote %s (%d rows)", stocks_path, len(stocks))
 
+        trim_all_daily = cfg.data_retention_days > 0
+
         if run_tz_today == end_date and not is_trading_day(end_date):
             LOG.info(
                 "End date %s is not a trading day in Baostock calendar; skipping K-line fetch.",
                 end_date,
             )
+            if trim_all_daily:
+                _apply_retention_to_universe(daily_dir, stocks, cfg.data_retention_days)
             return 0
 
         n_ok = 0
@@ -219,6 +266,9 @@ def run_sync() -> int:
 
             if cfg.request_sleep_sec > 0:
                 time.sleep(cfg.request_sleep_sec)
+
+        if trim_all_daily:
+            _apply_retention_to_universe(daily_dir, stocks, cfg.data_retention_days)
 
         LOG.info("Done. updated=%d skipped=%d errors=%d", n_ok, n_skip, n_err)
         return 0

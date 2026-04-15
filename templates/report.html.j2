@@ -13,6 +13,8 @@
       --accent: #5b8cff;
       --border: #2a3545;
       --down: #ff6b6b;
+      /* 与 summary 列对齐：名称 | 代码 | 收盘 | 连跌天 | 连跌总 | 近N日 | 操作 */
+      --row-grid: minmax(5.5rem, 1.35fr) minmax(4.5rem, 0.62fr) minmax(4rem, 0.52fr) minmax(2.75rem, 0.38fr) minmax(4.25rem, 0.52fr) minmax(4.25rem, 0.52fr) minmax(5rem, 0.72fr);
     }
     * { box-sizing: border-box; }
     body {
@@ -26,22 +28,116 @@
     h1 { margin: 0 0 0.35rem; font-size: 1.35rem; font-weight: 650; }
     .meta { color: var(--muted); font-size: 0.9rem; }
     main { padding: 1rem 1.25rem 2.5rem; max-width: 1200px; margin: 0 auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-    th, td { padding: 0.55rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    tr:hover td { background: rgba(91, 140, 255, 0.06); }
+
+    .report-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .report-head {
+      display: grid;
+      grid-template-columns: var(--row-grid);
+      gap: 0.35rem 0.5rem;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      border-bottom: 1px solid var(--border);
+    }
+    .report-head .rh-hint { text-align: right; }
+
+    details.stock-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(26, 35, 50, 0.45);
+      overflow: hidden;
+    }
+    details.stock-card:hover { border-color: #3d4f66; }
+    details.stock-card[open] { background: rgba(26, 35, 50, 0.75); }
+
+    details.stock-card > summary {
+      display: grid;
+      grid-template-columns: var(--row-grid);
+      gap: 0.35rem 0.5rem;
+      align-items: center;
+      padding: 0.65rem 0.75rem;
+      cursor: pointer;
+      list-style: none;
+      font-size: 0.9rem;
+    }
+    details.stock-card > summary::-webkit-details-marker { display: none; }
+    summary .name {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    summary .chev {
+      text-align: right;
+      color: var(--accent);
+      font-size: 0.82rem;
+      user-select: none;
+    }
+    details.stock-card[open] summary .chev { color: var(--muted); }
+
+    .badge {
+      display: inline-block;
+      padding: 0.12rem 0.42rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      background: #2f3b4d;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
     .num { font-variant-numeric: tabular-nums; text-align: right; }
     .pct { font-variant-numeric: tabular-nums; text-align: right; }
     .neg { color: var(--down); }
-    details.sub { margin: 0.35rem 0 0; }
-    details.sub summary {
-      cursor: pointer; color: var(--accent); font-size: 0.85rem; user-select: none;
+
+    .card-body {
+      width: 100%;
+      padding: 0 0.75rem 0.85rem;
+      border-top: 1px solid var(--border);
+      background: var(--panel);
     }
-    .inner { margin: 0.5rem 0 0.75rem; padding: 0.5rem 0.65rem; background: var(--panel); border-radius: 8px; border: 1px solid var(--border); }
-    .inner table { font-size: 0.82rem; }
-    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; background: #2f3b4d; color: var(--muted); }
-    footer { padding: 1rem 1.5rem; color: var(--muted); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    .card-body-inner {
+      overflow-x: auto;
+      padding-top: 0.65rem;
+    }
+    .card-body table {
+      width: 100%;
+      min-width: 280px;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+    .card-body th, .card-body td {
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-body th {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    footer {
+      padding: 1rem 1.5rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      border-top: 1px solid var(--border);
+    }
     .empty { color: var(--muted); padding: 2rem 0; text-align: center; }
+
+    @media (max-width: 720px) {
+      .report-head { display: none; }
+      details.stock-card > summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.85rem;
+        align-items: baseline;
+      }
+      summary .name { width: 100%; white-space: normal; }
+      summary .chev { width: 100%; text-align: left; margin-top: 0.15rem; font-size: 0.8rem; }
+    }
   </style>
 </head>
 <body>
@@ -56,68 +152,62 @@
     {% if rows|length == 0 %}
       <p class="empty">暂无符合条件的股票，或尚未运行同步脚本生成 <code>data/</code>。</p>
     {% else %}
-      <table aria-label="连续下跌股票">
-        <thead>
-          <tr>
-            <th>股票名称</th>
-            <th>代码</th>
-            <th>ST 标记</th>
-            <th class="num">最新收盘</th>
-            <th class="num">连跌天数</th>
-            <th class="pct">连跌总跌幅</th>
-            <th class="pct">近{{ lookback_trading_days }}日跌幅</th>
-            <th>明细</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}
-          <tr>
-            <td>{{ r.stock_name }}</td>
-            <td><span class="badge">{{ r.code }}</span></td>
-            <td>{{ r.is_st }}</td>
-            <td class="num">{{ "%.3f"|format(r.latest_close) }}</td>
-            <td class="num">{{ r.streak_days }}</td>
-            <td class="pct neg">{{ "%.2f"|format(r.streak_total_pct) }}%</td>
-            <td class="pct {% if r.month_20_pct is not none and r.month_20_pct < 0 %}neg{% endif %}">
+      <div class="report-list" role="list">
+        <div class="report-head" aria-hidden="true">
+          <span>股票名称</span>
+          <span>代码</span>
+          <span class="num">最新收盘</span>
+          <span class="num">连跌天数</span>
+          <span class="pct">连跌总跌幅</span>
+          <span class="pct">近{{ lookback_trading_days }}日</span>
+          <span class="rh-hint">明细</span>
+        </div>
+        {% for r in rows %}
+        <details class="stock-card" role="listitem">
+          <summary>
+            <span class="name" title="{{ r.stock_name }}">{{ r.stock_name }}</span>
+            <span class="cell-code"><span class="badge">{{ r.code }}</span></span>
+            <span class="num cell-close">{{ "%.3f"|format(r.latest_close) }}</span>
+            <span class="num cell-streak">{{ r.streak_days }}</span>
+            <span class="pct neg cell-stpct">{{ "%.2f"|format(r.streak_total_pct) }}%</span>
+            <span class="pct cell-month {% if r.month_20_pct is not none and r.month_20_pct < 0 %}neg{% endif %}">
               {% if r.month_20_pct is not none %}
                 {{ "%.2f"|format(r.month_20_pct) }}%
               {% else %}
                 —
               {% endif %}
-            </td>
-            <td>
-              <details class="sub">
-                <summary>展开每日跌幅</summary>
-                <div class="inner">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>日期</th>
-                        <th class="num">收盘</th>
-                        <th class="pct">当日涨跌幅</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for d in r.details %}
-                      <tr>
-                        <td>{{ d.date }}</td>
-                        <td class="num">{{ "%.3f"|format(d.close) }}</td>
-                        <td class="pct {% if d.day_pct < 0 %}neg{% endif %}">{{ "%.2f"|format(d.day_pct) }}%</td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            </span>
+            <span class="chev">展开每日跌幅</span>
+          </summary>
+          <div class="card-body">
+            <div class="card-body-inner">
+              <table aria-label="{{ r.stock_name }} 连跌明细">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th class="num">收盘</th>
+                    <th class="pct">当日涨跌幅</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for d in r.details %}
+                  <tr>
+                    <td>{{ d.date }}</td>
+                    <td class="num">{{ "%.3f"|format(d.close) }}</td>
+                    <td class="pct {% if d.day_pct < 0 %}neg{% endif %}">{{ "%.2f"|format(d.day_pct) }}%</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+        {% endfor %}
+      </div>
     {% endif %}
   </main>
   <footer>
-    数据来源于 Baostock；ST 标记为基于证券简称的启发式规则，非交易所官方字段。仅供学习研究，不构成投资建议。
+    数据来源于 Baostock。仅供学习研究，不构成投资建议。
   </footer>
 </body>
 </html>

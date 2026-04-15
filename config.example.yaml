@@ -7,16 +7,19 @@ start_date: "2026-03-01"
 end_date: "today"
 
 # Baostock adjustflag: 3 不复权, 2 前复权, 1 后复权
-adjustflag: "3"
+adjustflag: "2"
 
 # Report: minimum consecutive down days (close[t] < close[t-1]) ending on latest bar.
-min_streak_days: 5
+min_streak_days: 3
 
 # Report: "one month" ≈ trading days lookback for total return.
 lookback_trading_days: 30
 
 # Optional small delay between tickers (seconds) to reduce throttling.
 request_sleep_sec: 0.05
+
+# Daily CSV retention: drop rows older than N calendar days before the latest date in each file (~2 months = 62). Set 0 to disable.
+data_retention_days: 62
 
 # Directories (relative to repo root)
 data_dir: "data"

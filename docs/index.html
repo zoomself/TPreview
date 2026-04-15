@@ -13,6 +13,8 @@
       --accent: #5b8cff;
       --border: #2a3545;
       --down: #ff6b6b;
+      /* 与 summary 列对齐：名称 | 代码 | 收盘 | 连跌天 | 连跌总 | 近N日 | 操作 */
+      --row-grid: minmax(5.5rem, 1.35fr) minmax(4.5rem, 0.62fr) minmax(4rem, 0.52fr) minmax(2.75rem, 0.38fr) minmax(4.25rem, 0.52fr) minmax(4.25rem, 0.52fr) minmax(5rem, 0.72fr);
     }
     * { box-sizing: border-box; }
     body {
@@ -26,30 +28,124 @@
     h1 { margin: 0 0 0.35rem; font-size: 1.35rem; font-weight: 650; }
     .meta { color: var(--muted); font-size: 0.9rem; }
     main { padding: 1rem 1.25rem 2.5rem; max-width: 1200px; margin: 0 auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-    th, td { padding: 0.55rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    tr:hover td { background: rgba(91, 140, 255, 0.06); }
+
+    .report-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .report-head {
+      display: grid;
+      grid-template-columns: var(--row-grid);
+      gap: 0.35rem 0.5rem;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      border-bottom: 1px solid var(--border);
+    }
+    .report-head .rh-hint { text-align: right; }
+
+    details.stock-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(26, 35, 50, 0.45);
+      overflow: hidden;
+    }
+    details.stock-card:hover { border-color: #3d4f66; }
+    details.stock-card[open] { background: rgba(26, 35, 50, 0.75); }
+
+    details.stock-card > summary {
+      display: grid;
+      grid-template-columns: var(--row-grid);
+      gap: 0.35rem 0.5rem;
+      align-items: center;
+      padding: 0.65rem 0.75rem;
+      cursor: pointer;
+      list-style: none;
+      font-size: 0.9rem;
+    }
+    details.stock-card > summary::-webkit-details-marker { display: none; }
+    summary .name {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    summary .chev {
+      text-align: right;
+      color: var(--accent);
+      font-size: 0.82rem;
+      user-select: none;
+    }
+    details.stock-card[open] summary .chev { color: var(--muted); }
+
+    .badge {
+      display: inline-block;
+      padding: 0.12rem 0.42rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      background: #2f3b4d;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
     .num { font-variant-numeric: tabular-nums; text-align: right; }
     .pct { font-variant-numeric: tabular-nums; text-align: right; }
     .neg { color: var(--down); }
-    details.sub { margin: 0.35rem 0 0; }
-    details.sub summary {
-      cursor: pointer; color: var(--accent); font-size: 0.85rem; user-select: none;
+
+    .card-body {
+      width: 100%;
+      padding: 0 0.75rem 0.85rem;
+      border-top: 1px solid var(--border);
+      background: var(--panel);
     }
-    .inner { margin: 0.5rem 0 0.75rem; padding: 0.5rem 0.65rem; background: var(--panel); border-radius: 8px; border: 1px solid var(--border); }
-    .inner table { font-size: 0.82rem; }
-    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; background: #2f3b4d; color: var(--muted); }
-    footer { padding: 1rem 1.5rem; color: var(--muted); font-size: 0.82rem; border-top: 1px solid var(--border); }
+    .card-body-inner {
+      overflow-x: auto;
+      padding-top: 0.65rem;
+    }
+    .card-body table {
+      width: 100%;
+      min-width: 280px;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+    .card-body th, .card-body td {
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-body th {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    footer {
+      padding: 1rem 1.5rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      border-top: 1px solid var(--border);
+    }
     .empty { color: var(--muted); padding: 2rem 0; text-align: center; }
+
+    @media (max-width: 720px) {
+      .report-head { display: none; }
+      details.stock-card > summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.85rem;
+        align-items: baseline;
+      }
+      summary .name { width: 100%; white-space: normal; }
+      summary .chev { width: 100%; text-align: left; margin-top: 0.15rem; font-size: 0.8rem; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>连续下跌 ≥ 5 天（截至最新本地数据）</h1>
+    <h1>连续下跌 ≥ 3 天（截至最新本地数据）</h1>
     <div class="meta">
-      生成时间：2026-04-15 11:27:18 CST · 配置的数据结束日：2026-04-15 ·
-      近一月口径：20 个交易日涨跌幅
+      生成时间：2026-04-15 14:43:24 CST · 配置的数据结束日：2026-04-15 ·
+      近一月口径：30 个交易日涨跌幅
     </div>
   </header>
   <main>
@@ -58,7 +154,7 @@
     
   </main>
   <footer>
-    数据来源于 Baostock；ST 标记为基于证券简称的启发式规则，非交易所官方字段。仅供学习研究，不构成投资建议。
+    数据来源于 Baostock。仅供学习研究，不构成投资建议。
   </footer>
 </body>
 </html>

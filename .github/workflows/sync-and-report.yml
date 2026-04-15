@@ -3,8 +3,8 @@ name: Sync Baostock and publish report
 on:
   workflow_dispatch:
   schedule:
-    # ~17:30 Beijing (Asia/Shanghai); data availability varies — adjust if needed.
-    - cron: "30 9 * * *"
+    # ~16:30 Beijing (Asia/Shanghai); data availability varies — adjust if needed.
+    - cron: "30 8 * * *"
 
 permissions:
   contents: write
