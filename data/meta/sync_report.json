@@ -1,9 +1,9 @@
 {
-  "finished_at": "2026-04-17T11:01:32+08:00",
+  "finished_at": "2026-04-17T19:04:20+08:00",
   "end_date": "2026-04-17",
-  "universe_rows": 5520,
-  "updated": 0,
-  "skipped": 5520,
+  "universe_rows": 5521,
+  "updated": 5199,
+  "skipped": 322,
   "errors": 0,
-  "elapsed_sec": 3891.63
+  "elapsed_sec": 4220.23
 }
