@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -21,6 +22,29 @@ logging.basicConfig(
 )
 LOG = logging.getLogger("sync")
 
+# Baostock sessions can expire during long full-universe syncs; API then returns 用户未登录.
+_BS_LOGIN_EXPIRED_MARKERS = ("未登录", "用户未登录")
+
+
+def _bs_session_expired_msg(msg: str | None) -> bool:
+    if not msg:
+        return False
+    return any(m in msg for m in _BS_LOGIN_EXPIRED_MARKERS)
+
+
+def _refresh_bs_session() -> bool:
+    """Best-effort logout + login after session expiry."""
+    try:
+        bs.logout()
+    except Exception:
+        pass
+    lg = bs.login()
+    if lg.error_code != "0":
+        LOG.error("bs.re-login failed: %s", lg.error_msg)
+        return False
+    return True
+
+
 K_FIELDS = (
     "date,open,high,low,close,volume,amount,adjustflag,turn,pctChg"
 )
@@ -36,7 +60,18 @@ def _fmt(d: date) -> str:
 
 def trading_dates_between(cfg_start: str, cfg_end: str) -> list[str]:
     """Return sorted YYYY-MM-DD list of trading days (is_trading_day==1)."""
-    rs = bs.query_trade_dates(cfg_start, cfg_end)
+    rs = None
+    for attempt in range(3):
+        rs = bs.query_trade_dates(cfg_start, cfg_end)
+        if rs.error_code == "0":
+            break
+        if _bs_session_expired_msg(rs.error_msg) and attempt < 2:
+            LOG.warning("query_trade_dates: session expired; re-login (%d/2).", attempt + 1)
+            if not _refresh_bs_session():
+                break
+            continue
+        break
+    assert rs is not None
     if rs.error_code != "0":
         raise RuntimeError(f"query_trade_dates failed: {rs.error_msg}")
     idx_date = rs.fields.index("calendar_date")
@@ -94,16 +129,29 @@ def read_last_date(csv_path: Path) -> str | None:
 
 
 def fetch_k_range(code: str, start_date: str, end_date: str, adjustflag: str) -> pd.DataFrame:
-    rs = bs.query_history_k_data_plus(
-        code,
-        K_FIELDS,
-        start_date=start_date,
-        end_date=end_date,
-        frequency="d",
-        adjustflag=adjustflag,
-    )
-    if rs.error_code != "0":
+    rs = None
+    for attempt in range(3):
+        rs = bs.query_history_k_data_plus(
+            code,
+            K_FIELDS,
+            start_date=start_date,
+            end_date=end_date,
+            frequency="d",
+            adjustflag=adjustflag,
+        )
+        if rs.error_code == "0":
+            break
+        if _bs_session_expired_msg(rs.error_msg) and attempt < 2:
+            LOG.warning("%s: session expired on K fetch; re-login (%d/2).", code, attempt + 1)
+            if not _refresh_bs_session():
+                break
+            continue
         raise RuntimeError(f"{code}: query_history_k_data_plus: {rs.error_msg}")
+    if rs is None or rs.error_code != "0":
+        raise RuntimeError(
+            f"{code}: query_history_k_data_plus failed after retries: "
+            f"{getattr(rs, 'error_msg', 'no response')}"
+        )
     rows: list[list[str]] = []
     while rs.error_code == "0" and rs.next():
         rows.append(rs.get_row_data())
@@ -173,7 +221,17 @@ def _apply_retention_to_universe(daily_dir: Path, stocks: pd.DataFrame, retentio
 
 
 def is_trading_day(d: str) -> bool:
-    rs = bs.query_trade_dates(d, d)
+    rs = None
+    for attempt in range(3):
+        rs = bs.query_trade_dates(d, d)
+        if rs.error_code == "0":
+            break
+        if _bs_session_expired_msg(rs.error_msg) and attempt < 2:
+            if not _refresh_bs_session():
+                break
+            continue
+        return False
+    assert rs is not None
     if rs.error_code != "0":
         return False
     if not rs.next():
@@ -232,10 +290,25 @@ def run_sync() -> int:
                 _apply_retention_to_universe(daily_dir, stocks, cfg.data_retention_days)
             return 0
 
+        relog_raw = os.environ.get("SYNC_RELOGIN_EVERY", "").strip()
+        relog_every = int(relog_raw) if relog_raw.isdigit() else 0
+        if relog_every > 0:
+            LOG.info(
+                "SYNC_RELOGIN_EVERY=%d — proactive Baostock re-login every %d stocks.",
+                relog_every,
+                relog_every,
+            )
+
+        t0 = time.monotonic()
         n_ok = 0
         n_skip = 0
         n_err = 0
-        for _, row in stocks.iterrows():
+        err_codes: list[str] = []
+        for idx, (_, row) in enumerate(stocks.iterrows()):
+            if relog_every > 0 and idx > 0 and idx % relog_every == 0:
+                LOG.info("Proactive Baostock re-login (every %d stocks, at index %d).", relog_every, idx)
+                if not _refresh_bs_session():
+                    LOG.error("Proactive re-login failed; continuing (per-request retry may still recover).")
             code = str(row["code"])
             path = daily_csv_path(daily_dir, code)
             last = read_last_date(path)
@@ -263,6 +336,8 @@ def run_sync() -> int:
             except Exception as e:
                 LOG.warning("%s: %s", code, e)
                 n_err += 1
+                if len(err_codes) < 50:
+                    err_codes.append(code)
 
             if cfg.request_sleep_sec > 0:
                 time.sleep(cfg.request_sleep_sec)
@@ -270,7 +345,28 @@ def run_sync() -> int:
         if trim_all_daily:
             _apply_retention_to_universe(daily_dir, stocks, cfg.data_retention_days)
 
-        LOG.info("Done. updated=%d skipped=%d errors=%d", n_ok, n_skip, n_err)
+        elapsed = time.monotonic() - t0
+        report = {
+            "finished_at": datetime.now(TZ_SH).isoformat(timespec="seconds"),
+            "end_date": end_date,
+            "universe_rows": int(len(stocks)),
+            "updated": n_ok,
+            "skipped": n_skip,
+            "errors": n_err,
+            "elapsed_sec": round(elapsed, 2),
+        }
+        if err_codes:
+            report["error_codes_sample"] = err_codes
+        report_path = meta_dir / "sync_report.json"
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        LOG.info("Wrote %s", report_path)
+        LOG.info(
+            "Done. updated=%d skipped=%d errors=%d elapsed_s=%.1f",
+            n_ok,
+            n_skip,
+            n_err,
+            elapsed,
+        )
         return 0
     finally:
         bs.logout()
