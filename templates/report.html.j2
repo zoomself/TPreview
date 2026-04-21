@@ -1,9 +1,66 @@
+{% macro row_cards(rows, mode) -%}
+{% set bear = mode == "bear" %}
+        {% for r in rows %}
+        <details
+          class="stock-card"
+          role="listitem"
+          style="--streak-tint: {{ r.streak_bg }};"
+          data-streak="{{ r.streak_days }}"
+          data-lb15="{% if r.lookback_15_pct is not none %}{{ r.lookback_15_pct }}{% endif %}"
+          data-lbn="{% if r.month_20_pct is not none %}{{ r.month_20_pct }}{% endif %}"
+        >
+          <summary>
+            <span class="name-line" title="{{ r.stock_title }}">{{ r.stock_name }}<span class="code-inline">（{{ r.code }}）</span></span>
+            <span class="num cell-close">{{ "%.3f"|format(r.latest_close) }}</span>
+            <span class="num cell-streak">{{ r.streak_days }}</span>
+            <span class="pct cell-stpct {% if bear %}neg{% else %}pos{% endif %}">{{ "%.2f"|format(r.streak_total_pct) }}%</span>
+            <span class="pct cell-lb15 {% if r.lookback_15_pct is not none %}{% if bear and r.lookback_15_pct < 0 %}neg{% elif not bear and r.lookback_15_pct > 0 %}pos{% elif not bear and r.lookback_15_pct < 0 %}neg{% elif bear and r.lookback_15_pct > 0 %}pos{% endif %}{% endif %}">
+              {% if r.lookback_15_pct is not none %}
+                {{ "%.2f"|format(r.lookback_15_pct) }}%
+              {% else %}
+                —
+              {% endif %}
+            </span>
+            <span class="pct cell-month {% if r.month_20_pct is not none %}{% if bear and r.month_20_pct < 0 %}neg{% elif not bear and r.month_20_pct > 0 %}pos{% elif not bear and r.month_20_pct < 0 %}neg{% elif bear and r.month_20_pct > 0 %}pos{% endif %}{% endif %}">
+              {% if r.month_20_pct is not none %}
+                {{ "%.2f"|format(r.month_20_pct) }}%
+              {% else %}
+                —
+              {% endif %}
+            </span>
+            <span class="chev">{% if bear %}展开每日跌幅{% else %}展开每日涨跌{% endif %}</span>
+          </summary>
+          <div class="card-body">
+            <div class="card-body-inner">
+              <table aria-label="{{ r.stock_title }}{% if bear %} 连跌明细{% else %} 连涨明细{% endif %}">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th class="num">收盘</th>
+                    <th class="pct">当日涨跌幅</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for d in r.details %}
+                  <tr>
+                    <td>{{ d.date }}</td>
+                    <td class="num">{{ "%.3f"|format(d.close) }}</td>
+                    <td class="pct {% if bear and d.day_pct < 0 %}neg{% elif not bear and d.day_pct > 0 %}pos{% elif not bear and d.day_pct < 0 %}neg{% elif bear and d.day_pct > 0 %}pos{% endif %}">{{ "%.2f"|format(d.day_pct) }}%</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+        {% endfor %}
+{%- endmacro %}
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>A 股连续下跌筛选（Baostock 本地数据）</title>
+  <title>A 股连续涨跌筛选（Baostock 本地数据）</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -13,8 +70,13 @@
       --accent: #5b8cff;
       --border: #2a3545;
       --down: #ff6b6b;
-      /* 名称(含代码) | 收盘 | 连跌天 | 连跌总 | 近N日 | 操作 */
-      --row-grid: minmax(7rem, 2.1fr) minmax(4rem, 0.52fr) minmax(2.75rem, 0.38fr) minmax(4.25rem, 0.52fr) minmax(4.25rem, 0.52fr) minmax(5rem, 0.72fr);
+      --up: #3dd68c;
+      /* 与卡片 summary 同宽：卡片有 1px 左右边框，表头用 margin+width 对齐内层栅格 */
+      --row-pad-x: 0.65rem;
+      --card-border: 1px;
+      --row-grid:
+        minmax(0, min(17.5rem, 34%))
+        repeat(6, minmax(2.75rem, 1fr));
     }
     * { box-sizing: border-box; }
     body {
@@ -25,17 +87,53 @@
       padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
       background: linear-gradient(180deg, #15202b 0%, var(--bg) 100%);
     }
+    .mode-switch {
+      display: inline-flex;
+      gap: 0.25rem;
+      margin-bottom: 0.65rem;
+      padding: 0.2rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .mode-switch button {
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 0.45rem 1.1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+    }
+    .mode-switch button[aria-selected="true"] {
+      background: rgba(91, 140, 255, 0.22);
+      color: var(--text);
+    }
+    .mode-switch button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
     h1 { margin: 0 0 0.35rem; font-size: 1.35rem; font-weight: 650; }
     .meta { color: var(--muted); font-size: 0.9rem; }
+    .global-meta { margin-bottom: 0; }
+    .report-pane .pane-meta { margin: 0.35rem 0 0.85rem; }
     main { padding: 1rem 1.25rem 2.5rem; max-width: 1200px; margin: 0 auto; }
 
-    .report-list { display: flex; flex-direction: column; gap: 0.5rem; }
+    .report-list { display: flex; flex-direction: column; gap: 0.45rem; }
 
     .report-head {
       display: grid;
       grid-template-columns: var(--row-grid);
-      gap: 0.35rem 0.5rem;
-      padding: 0.45rem 0.65rem;
+      align-items: center;
+      column-gap: 0.4rem;
+      row-gap: 0.25rem;
+      padding: 0.42rem var(--row-pad-x);
+      width: calc(100% - 2 * var(--card-border));
+      margin-inline: var(--card-border);
+      box-sizing: border-box;
+      min-width: 0;
       font-size: 0.72rem;
       font-weight: 600;
       color: var(--muted);
@@ -43,7 +141,29 @@
       letter-spacing: 0.03em;
       border-bottom: 1px solid var(--border);
     }
-    .report-head .rh-hint { text-align: right; }
+    .report-head > * { min-width: 0; }
+    .report-head .num,
+    .report-head .pct,
+    .report-head .rh-hint { text-align: center; }
+    .report-head .sort-btn {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      margin: 0;
+      text-align: center;
+    }
+    .report-head .sort-btn:hover { color: var(--text); }
+    .report-head .sort-btn.sort-active { color: var(--accent); }
 
     details.stock-card {
       border: 1px solid var(--border);
@@ -56,16 +176,18 @@
     details.stock-card > summary {
       display: grid;
       grid-template-columns: var(--row-grid);
-      gap: 0.35rem 0.5rem;
+      column-gap: 0.4rem;
+      row-gap: 0.25rem;
       align-items: center;
-      padding: 0.65rem 0.75rem;
+      padding: 0.58rem var(--row-pad-x);
       cursor: pointer;
       list-style: none;
       font-size: 0.9rem;
-      /* 浅色色块：由行内 --streak-tint 提供 */
+      min-width: 0;
       background: var(--streak-tint, rgba(26, 35, 50, 0.25));
     }
     details.stock-card > summary::-webkit-details-marker { display: none; }
+    summary > * { min-width: 0; }
     summary .name-line {
       font-weight: 600;
       overflow: hidden;
@@ -79,16 +201,20 @@
       font-variant-numeric: tabular-nums;
     }
     summary .chev {
-      text-align: right;
+      text-align: center;
       color: var(--accent);
       font-size: 0.82rem;
       user-select: none;
     }
     details.stock-card[open] summary .chev { color: var(--muted); }
 
-    .num { font-variant-numeric: tabular-nums; text-align: right; }
-    .pct { font-variant-numeric: tabular-nums; text-align: right; }
+    .num, .pct { font-variant-numeric: tabular-nums; }
+    details.stock-card > summary .num,
+    details.stock-card > summary .pct { text-align: center; }
+    .card-body .num,
+    .card-body .pct { text-align: right; }
     .neg { color: var(--down); }
+    .pos { color: var(--up); }
 
     .card-body {
       width: 100%;
@@ -125,8 +251,32 @@
     }
     .empty { color: var(--muted); padding: 2rem 0; text-align: center; }
 
+    .sort-toolbar-mobile {
+      display: none;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 0.5rem;
+    }
+    .sort-toolbar-mobile .sort-btn {
+      flex: 1;
+      min-width: 5.5rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      background: rgba(26, 35, 50, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 0.4rem 0.5rem;
+    }
+    .sort-toolbar-mobile .sort-btn:hover { color: var(--text); border-color: #3d4f66; }
+    .sort-toolbar-mobile .sort-btn.sort-active { color: var(--accent); border-color: var(--accent); }
+
     @media (max-width: 720px) {
       .report-head { display: none; }
+      .sort-toolbar-mobile { display: flex; }
       details.stock-card > summary {
         display: flex;
         flex-wrap: wrap;
@@ -140,70 +290,188 @@
 </head>
 <body>
   <header>
-    <h1>连续下跌 ≥ {{ min_streak_days }} 天（截至最新本地数据）</h1>
-    <div class="meta">
-      生成时间：{{ generated_at }} · 配置的数据结束日：{{ data_end_date or "—" }} ·
-      近一月口径：{{ lookback_trading_days }} 个交易日涨跌幅 · 已排除 ST 类证券
+    <div class="mode-switch" role="tablist" aria-label="看涨 / 看跌">
+      <button type="button" id="tab-bear" role="tab" aria-selected="true" aria-controls="report-pane-bear" tabindex="0">看跌</button>
+      <button type="button" id="tab-bull" role="tab" aria-selected="false" aria-controls="report-pane-bull" tabindex="-1">看涨</button>
+    </div>
+    <div class="meta global-meta">
+      生成时间：{{ generated_at }} · 配置的数据结束日：{{ data_end_date or "—" }} · 已排除 ST 类证券
     </div>
   </header>
   <main>
-    {% if rows|length == 0 %}
+    {% if rows_bear|length == 0 and rows_bull|length == 0 %}
       <p class="empty">暂无符合条件的股票，或尚未运行同步脚本生成 <code>data/</code>。</p>
     {% else %}
-      <div class="report-list" role="list">
-        <div class="report-head" aria-hidden="true">
+    <section id="report-pane-bear" class="report-pane" role="tabpanel" aria-labelledby="tab-bear">
+      <h1>连续下跌 ≥ {{ min_streak_days }} 天（截至最新本地数据）</h1>
+      <div class="meta pane-meta">
+        近15日、近{{ lookback_trading_days }}日为对应交易日累计涨跌幅（跌视角）· 排序默认：连跌天数降序，同天数下连跌总跌幅更深优先
+      </div>
+      {% if rows_bear|length == 0 %}
+      <p class="empty">暂无连续下跌达标标的。</p>
+      {% else %}
+      <div class="sort-toolbar-mobile" aria-label="看跌排序">
+        <button type="button" class="sort-btn sort-active" data-sort="streak" title="按连跌天数从高到低">连跌天数</button>
+        <button type="button" class="sort-btn" data-sort="lb15" title="按近15日跌幅从深到浅">近15日</button>
+        <button type="button" class="sort-btn" data-sort="lbn" title="按近{{ lookback_trading_days }}日跌幅从深到浅">近{{ lookback_trading_days }}日</button>
+      </div>
+      <div class="report-list" role="list" data-report-mode="bear">
+        <div class="report-head">
           <span>股票（含代码）</span>
           <span class="num">最新收盘</span>
-          <span class="num">连跌天数</span>
+          <button type="button" class="sort-btn num sort-active" data-sort="streak" title="按连跌天数从高到低">连跌天数</button>
           <span class="pct">连跌总跌幅</span>
-          <span class="pct">近{{ lookback_trading_days }}日</span>
+          <button type="button" class="sort-btn pct" data-sort="lb15" title="按近15日跌幅从深到浅">近15日</button>
+          <button type="button" class="sort-btn pct" data-sort="lbn" title="按近{{ lookback_trading_days }}日跌幅从深到浅">近{{ lookback_trading_days }}日</button>
           <span class="rh-hint">明细</span>
         </div>
-        {% for r in rows %}
-        <details class="stock-card" role="listitem" style="--streak-tint: {{ r.streak_bg }};">
-          <summary>
-            <span class="name-line" title="{{ r.stock_title }}">{{ r.stock_name }}<span class="code-inline">（{{ r.code }}）</span></span>
-            <span class="num cell-close">{{ "%.3f"|format(r.latest_close) }}</span>
-            <span class="num cell-streak">{{ r.streak_days }}</span>
-            <span class="pct neg cell-stpct">{{ "%.2f"|format(r.streak_total_pct) }}%</span>
-            <span class="pct cell-month {% if r.month_20_pct is not none and r.month_20_pct < 0 %}neg{% endif %}">
-              {% if r.month_20_pct is not none %}
-                {{ "%.2f"|format(r.month_20_pct) }}%
-              {% else %}
-                —
-              {% endif %}
-            </span>
-            <span class="chev">展开每日跌幅</span>
-          </summary>
-          <div class="card-body">
-            <div class="card-body-inner">
-              <table aria-label="{{ r.stock_title }} 连跌明细">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th class="num">收盘</th>
-                    <th class="pct">当日涨跌幅</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for d in r.details %}
-                  <tr>
-                    <td>{{ d.date }}</td>
-                    <td class="num">{{ "%.3f"|format(d.close) }}</td>
-                    <td class="pct {% if d.day_pct < 0 %}neg{% endif %}">{{ "%.2f"|format(d.day_pct) }}%</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </details>
-        {% endfor %}
+        {{ row_cards(rows_bear, "bear") }}
       </div>
+      {% endif %}
+    </section>
+
+    <section id="report-pane-bull" class="report-pane" role="tabpanel" aria-labelledby="tab-bull" hidden>
+      <h1>连续上涨 ≥ {{ min_streak_days }} 天（截至最新本地数据）</h1>
+      <div class="meta pane-meta">
+        近15日、近{{ lookback_trading_days }}日为对应交易日累计涨跌幅（涨视角）· 排序默认：连涨天数降序，同天数下连涨总涨幅更大优先
+      </div>
+      {% if rows_bull|length == 0 %}
+      <p class="empty">暂无连续上涨达标标的。</p>
+      {% else %}
+      <div class="sort-toolbar-mobile" aria-label="看涨排序">
+        <button type="button" class="sort-btn sort-active" data-sort="streak" title="按连涨天数从高到低">连涨天数</button>
+        <button type="button" class="sort-btn" data-sort="lb15" title="按近15日涨幅从高到低">近15日</button>
+        <button type="button" class="sort-btn" data-sort="lbn" title="按近{{ lookback_trading_days }}日涨幅从高到低">近{{ lookback_trading_days }}日</button>
+      </div>
+      <div class="report-list" role="list" data-report-mode="bull">
+        <div class="report-head">
+          <span>股票（含代码）</span>
+          <span class="num">最新收盘</span>
+          <button type="button" class="sort-btn num sort-active" data-sort="streak" title="按连涨天数从高到低">连涨天数</button>
+          <span class="pct">连涨总涨幅</span>
+          <button type="button" class="sort-btn pct" data-sort="lb15" title="按近15日涨幅从高到低">近15日</button>
+          <button type="button" class="sort-btn pct" data-sort="lbn" title="按近{{ lookback_trading_days }}日涨幅从高到低">近{{ lookback_trading_days }}日</button>
+          <span class="rh-hint">明细</span>
+        </div>
+        {{ row_cards(rows_bull, "bull") }}
+      </div>
+      {% endif %}
+    </section>
     {% endif %}
   </main>
   <footer>
     数据来源于 Baostock；列表不含 ST 类证券。仅供学习研究，不构成投资建议。
   </footer>
+  <script>
+(function () {
+  var STORAGE_KEY = "tpreview_report_mode";
+  var titleBase = "A 股连续涨跌筛选（Baostock 本地数据）";
+  var titleBear = "连续下跌筛选 · " + titleBase;
+  var titleBull = "连续上涨筛选 · " + titleBase;
+
+  var paneBear = document.getElementById("report-pane-bear");
+  var paneBull = document.getElementById("report-pane-bull");
+  var tabBear = document.getElementById("tab-bear");
+  var tabBull = document.getElementById("tab-bull");
+  if (!paneBear || !paneBull || !tabBear || !tabBull) return;
+
+  function setMode(mode) {
+    var bull = mode === "bull";
+    paneBull.hidden = !bull;
+    paneBear.hidden = bull;
+    tabBull.setAttribute("aria-selected", bull ? "true" : "false");
+    tabBear.setAttribute("aria-selected", bull ? "false" : "true");
+    tabBull.tabIndex = bull ? 0 : -1;
+    tabBear.tabIndex = bull ? -1 : 0;
+    document.title = bull ? titleBull : titleBear;
+    try {
+      localStorage.setItem(STORAGE_KEY, mode);
+    } catch (e) {}
+  }
+
+  var saved = null;
+  try {
+    saved = localStorage.getItem(STORAGE_KEY);
+  } catch (e) {}
+  var bearHasList = !!paneBear.querySelector(".report-list");
+  var bullHasList = !!paneBull.querySelector(".report-list");
+  if (saved === "bull" || (saved !== "bear" && !bearHasList && bullHasList)) {
+    setMode("bull");
+  } else {
+    setMode("bear");
+  }
+
+  tabBear.addEventListener("click", function () { setMode("bear"); });
+  tabBull.addEventListener("click", function () { setMode("bull"); });
+
+  function parsePct(el, key) {
+    var v = el.getAttribute(key);
+    if (v === null || v === "") return null;
+    var n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function cmpPctDeepFirst(a, b) {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    if (a !== b) return a < b ? -1 : 1;
+    return 0;
+  }
+
+  function cmpPctHighFirst(a, b) {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    if (a !== b) return a > b ? -1 : 1;
+    return 0;
+  }
+
+  function sortList(list, sortKey) {
+    var cmpPct = list.getAttribute("data-report-mode") === "bull" ? cmpPctHighFirst : cmpPctDeepFirst;
+    var cards = Array.prototype.slice.call(list.querySelectorAll("details.stock-card"));
+    cards.sort(function (x, y) {
+      if (sortKey === "streak") {
+        var sx = parseInt(x.getAttribute("data-streak"), 10) || 0;
+        var sy = parseInt(y.getAttribute("data-streak"), 10) || 0;
+        return sy - sx;
+      }
+      if (sortKey === "lb15") {
+        return cmpPct(parsePct(x, "data-lb15"), parsePct(y, "data-lb15"));
+      }
+      return cmpPct(parsePct(x, "data-lbn"), parsePct(y, "data-lbn"));
+    });
+    cards.forEach(function (c) { list.appendChild(c); });
+  }
+
+  function wireSort(list) {
+    if (!list) return;
+    var head = list.querySelector(".report-head");
+    var toolbar = list.previousElementSibling;
+    var selectors = [];
+    if (head) selectors.push.apply(selectors, head.querySelectorAll(".sort-btn"));
+    if (toolbar && toolbar.classList && toolbar.classList.contains("sort-toolbar-mobile")) {
+      selectors.push.apply(selectors, toolbar.querySelectorAll(".sort-btn"));
+    }
+
+    function activate(sortMode) {
+      selectors.forEach(function (b) {
+        b.classList.toggle("sort-active", b.getAttribute("data-sort") === sortMode);
+      });
+    }
+
+    selectors.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var mode = btn.getAttribute("data-sort");
+        if (!mode) return;
+        activate(mode);
+        sortList(list, mode);
+      });
+    });
+  }
+
+  document.querySelectorAll(".report-list").forEach(wireSort);
+})();
+  </script>
 </body>
 </html>
