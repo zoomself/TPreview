@@ -1,4 +1,14 @@
-{% macro row_cards(rows, mode) -%}
+{% macro day_table_body(details_list, bear) -%}
+                  {% for d in details_list %}
+                  <tr>
+                    <td>{{ d.date }}</td>
+                    <td class="num">{{ "%.3f"|format(d.close) }}</td>
+                    <td class="pct {% if bear and d.day_pct < 0 %}neg{% elif not bear and d.day_pct > 0 %}pos{% elif not bear and d.day_pct < 0 %}neg{% elif bear and d.day_pct > 0 %}pos{% endif %}">{{ "%.2f"|format(d.day_pct) }}%</td>
+                  </tr>
+                  {% endfor %}
+{%- endmacro %}
+
+{% macro row_cards(rows, mode, lookback_n) -%}
 {% set bear = mode == "bear" %}
         {% for r in rows %}
         <details
@@ -28,28 +38,77 @@
                 —
               {% endif %}
             </span>
-            <span class="chev">{% if bear %}展开每日跌幅{% else %}展开每日涨跌{% endif %}</span>
+            <span class="chev">展开明细</span>
           </summary>
-          <div class="card-body">
-            <div class="card-body-inner">
-              <table aria-label="{{ r.stock_title }}{% if bear %} 连跌明细{% else %} 连涨明细{% endif %}">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th class="num">收盘</th>
-                    <th class="pct">当日涨跌幅</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for d in r.details %}
-                  <tr>
-                    <td>{{ d.date }}</td>
-                    <td class="num">{{ "%.3f"|format(d.close) }}</td>
-                    <td class="pct {% if bear and d.day_pct < 0 %}neg{% elif not bear and d.day_pct > 0 %}pos{% elif not bear and d.day_pct < 0 %}neg{% elif bear and d.day_pct > 0 %}pos{% endif %}">{{ "%.2f"|format(d.day_pct) }}%</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+          <div class="card-body" data-view="table">
+            <div class="view-toggle" role="tablist" aria-label="展示方式">
+              <button type="button" class="view-btn" data-view="table" aria-selected="true" title="数据表">数据</button>
+              <button type="button" class="view-btn" data-view="bar" aria-selected="false" title="柱状图">柱状</button>
+              <button type="button" class="view-btn" data-view="line" aria-selected="false" title="折线图">折线</button>
+            </div>
+            <div class="card-body-data">
+              <div class="card-body-inner detail-table-wrap">
+                <div class="detail-pane" data-detail="streak" data-pane-label="{% if bear %}连跌区间{% else %}连涨区间{% endif %}（逐日）">
+                  <p class="detail-hint">{% if bear %}与「连跌天数 / 连跌总跌幅」对应的逐日 K{% else %}与「连涨天数 / 连涨总涨幅」对应的逐日 K{% endif %}</p>
+                  {% if r.details|length == 0 %}
+                  <p class="detail-empty">无明细</p>
+                  {% else %}
+                  <table class="day-table" aria-label="{{ r.stock_title }} 连段明细">
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th class="num">收盘</th>
+                        <th class="pct">当日涨跌幅</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {{ day_table_body(r.details, bear) }}
+                    </tbody>
+                  </table>
+                  {% endif %}
+                </div>
+                <div class="detail-pane" data-detail="lb15" data-pane-label="近15日（逐日）" hidden>
+                  <p class="detail-hint">近 15 个交易日、逐日涨跌（与上方连段列独立）</p>
+                  {% if r.lookback_15_details|length == 0 %}
+                  <p class="detail-empty">历史 K 线不足 16 根，无法展示近 15 日逐日数据。</p>
+                  {% else %}
+                  <table class="day-table" aria-label="{{ r.stock_title }} 近15日逐日">
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th class="num">收盘</th>
+                        <th class="pct">当日涨跌幅</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {{ day_table_body(r.lookback_15_details, bear) }}
+                    </tbody>
+                  </table>
+                  {% endif %}
+                </div>
+                <div class="detail-pane" data-detail="lbn" data-pane-label="近{{ lookback_n }}日（逐日）" hidden>
+                  <p class="detail-hint">近 {{ lookback_n }} 个交易日、逐日涨跌（与上方连段列独立）</p>
+                  {% if r.lookback_n_details|length == 0 %}
+                  <p class="detail-empty">历史 K 线不足，无法展示近 {{ lookback_n }} 日逐日数据。</p>
+                  {% else %}
+                  <table class="day-table" aria-label="{{ r.stock_title }} 近{{ lookback_n }}日逐日">
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th class="num">收盘</th>
+                        <th class="pct">当日涨跌幅</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {{ day_table_body(r.lookback_n_details, bear) }}
+                    </tbody>
+                  </table>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="chart-dock" hidden>
+                <canvas class="day-chart" aria-label="日涨跌幅图"></canvas>
+              </div>
             </div>
           </div>
         </details>
@@ -61,6 +120,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>A 股连续涨跌筛选（Baostock 本地数据）</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
   <style>
     :root {
       --bg: #0f1419;
@@ -243,6 +303,36 @@
       font-weight: 600;
     }
 
+    .view-toggle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.5rem;
+    }
+    .view-toggle .view-btn {
+      font: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(26, 35, 50, 0.55);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .view-toggle .view-btn[aria-selected="true"] {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .detail-hint {
+      margin: 0 0 0.4rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .detail-empty { margin: 0; font-size: 0.84rem; color: var(--muted); }
+    .card-body .chart-dock { margin-top: 0.4rem; min-height: 220px; max-height: 360px; position: relative; }
+    .card-body .chart-dock canvas { max-height: 320px; }
+
     footer {
       padding: 1rem 1.5rem;
       color: var(--muted);
@@ -305,7 +395,7 @@
     <section id="report-pane-bear" class="report-pane" role="tabpanel" aria-labelledby="tab-bear">
       <h1>连续下跌 ≥ {{ min_streak_days }} 天（截至最新本地数据）</h1>
       <div class="meta pane-meta">
-        近15日、近{{ lookback_trading_days }}日为对应交易日累计涨跌幅（跌视角）· 排序默认：连跌天数降序，同天数下连跌总跌幅更深优先
+        近15日、近{{ lookback_trading_days }}日为累计涨跌幅（跌视角）· 列头排序只重排列表、不减少标的。展开后默认随当前排序列展示对应逐日；也可用手动「数据/柱状/折线」· 默认排序：连跌天数降序，同天数连跌总跌幅更深优先
       </div>
       {% if rows_bear|length == 0 %}
       <p class="empty">暂无连续下跌达标标的。</p>
@@ -315,7 +405,7 @@
         <button type="button" class="sort-btn" data-sort="lb15" title="按近15日跌幅从深到浅">近15日</button>
         <button type="button" class="sort-btn" data-sort="lbn" title="按近{{ lookback_trading_days }}日跌幅从深到浅">近{{ lookback_trading_days }}日</button>
       </div>
-      <div class="report-list" role="list" data-report-mode="bear">
+      <div class="report-list" role="list" data-report-mode="bear" data-active-detail="streak">
         <div class="report-head">
           <span>股票（含代码）</span>
           <span class="num">最新收盘</span>
@@ -325,7 +415,7 @@
           <button type="button" class="sort-btn pct" data-sort="lbn" title="按近{{ lookback_trading_days }}日跌幅从深到浅">近{{ lookback_trading_days }}日</button>
           <span class="rh-hint">明细</span>
         </div>
-        {{ row_cards(rows_bear, "bear") }}
+        {{ row_cards(rows_bear, "bear", lookback_trading_days) }}
       </div>
       {% endif %}
     </section>
@@ -333,7 +423,7 @@
     <section id="report-pane-bull" class="report-pane" role="tabpanel" aria-labelledby="tab-bull" hidden>
       <h1>连续上涨 ≥ {{ min_streak_days }} 天（截至最新本地数据）</h1>
       <div class="meta pane-meta">
-        近15日、近{{ lookback_trading_days }}日为对应交易日累计涨跌幅（涨视角）· 排序默认：连涨天数降序，同天数下连涨总涨幅更大优先
+        近15日、近{{ lookback_trading_days }}日为累计涨跌幅（涨视角）· 列头排序只重排、不减少标的。展开随当前排序列展示逐日；支持「数据/柱状/折线」· 默认：连涨天数降序，同天数连涨总涨幅更大优先
       </div>
       {% if rows_bull|length == 0 %}
       <p class="empty">暂无连续上涨达标标的。</p>
@@ -343,7 +433,7 @@
         <button type="button" class="sort-btn" data-sort="lb15" title="按近15日涨幅从高到低">近15日</button>
         <button type="button" class="sort-btn" data-sort="lbn" title="按近{{ lookback_trading_days }}日涨幅从高到低">近{{ lookback_trading_days }}日</button>
       </div>
-      <div class="report-list" role="list" data-report-mode="bull">
+      <div class="report-list" role="list" data-report-mode="bull" data-active-detail="streak">
         <div class="report-head">
           <span>股票（含代码）</span>
           <span class="num">最新收盘</span>
@@ -353,7 +443,7 @@
           <button type="button" class="sort-btn pct" data-sort="lbn" title="按近{{ lookback_trading_days }}日涨幅从高到低">近{{ lookback_trading_days }}日</button>
           <span class="rh-hint">明细</span>
         </div>
-        {{ row_cards(rows_bull, "bull") }}
+        {{ row_cards(rows_bull, "bull", lookback_trading_days) }}
       </div>
       {% endif %}
     </section>
@@ -444,6 +534,131 @@
     cards.forEach(function (c) { list.appendChild(c); });
   }
 
+  function destroyDayChart(body) {
+    if (body && body._dayChart) {
+      try { body._dayChart.destroy(); } catch (e) {}
+      body._dayChart = null;
+    }
+  }
+
+  function renderDayChart(body, detailKey, viewKind) {
+    if (typeof Chart === "undefined" || !body) return;
+    var card = body.closest("details.stock-card");
+    if (!card) return;
+    var list = card.closest(".report-list");
+    var isBull = list && list.getAttribute("data-report-mode") === "bull";
+    var pane = body.querySelector('.detail-pane[data-detail="' + detailKey + '"]');
+    var tbody = pane && pane.querySelector("table.day-table tbody");
+    destroyDayChart(body);
+    if (!tbody || !tbody.rows.length) return;
+    var labels = [];
+    var vals = [];
+    var barColors = [];
+    var i;
+    for (i = 0; i < tbody.rows.length; i++) {
+      var tds = tbody.rows[i].cells;
+      if (tds.length < 3) continue;
+      labels.push(tds[0].textContent.trim());
+      var pv = parseFloat(String(tds[2].textContent || "").replace(/%/g, "").replace(/，/g, "").trim());
+      if (!isFinite(pv)) pv = 0;
+      vals.push(pv);
+      if (pv < 0) barColors.push("rgba(255,107,107,0.78)");
+      else if (pv > 0) barColors.push("rgba(61,214,140,0.82)");
+      else barColors.push("rgba(154,167,178,0.5)");
+    }
+    var cv = body.querySelector("canvas.day-chart");
+    if (!cv || !vals.length) return;
+    var ctx = cv.getContext("2d");
+    var darkAxis = "#9aa7b2";
+    if (viewKind === "bar") {
+      body._dayChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [{ data: vals, backgroundColor: barColors, borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { maxRotation: 60, minRotation: 0, color: darkAxis, font: { size: 10 } } },
+            y: { ticks: { color: darkAxis, callback: function (v) { return v + "%"; } } }
+          }
+        }
+      });
+    } else {
+      body._dayChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            data: vals,
+            borderColor: isBull ? "rgba(61,214,140,0.95)" : "rgba(255,107,107,0.9)",
+            backgroundColor: "rgba(91, 140, 255, 0.12)",
+            fill: true,
+            tension: 0.2,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: darkAxis, font: { size: 10 } } },
+            y: { ticks: { color: darkAxis, callback: function (v) { return v + "%"; } } }
+          }
+        }
+      });
+    }
+  }
+
+  function syncCardBody(card) {
+    var body = card.querySelector(".card-body");
+    if (!body) return;
+    var list = card.closest(".report-list");
+    var key = (list && list.getAttribute("data-active-detail")) || "streak";
+    body.querySelectorAll(".detail-pane").forEach(function (pane) {
+      pane.hidden = pane.getAttribute("data-detail") !== key;
+    });
+    var view = body.getAttribute("data-view") || "table";
+    var wrap = body.querySelector(".detail-table-wrap");
+    var dock = body.querySelector(".chart-dock");
+    if (view === "table") {
+      if (wrap) wrap.hidden = false;
+      if (dock) dock.hidden = true;
+      destroyDayChart(body);
+    } else {
+      if (wrap) wrap.hidden = true;
+      if (dock) dock.hidden = false;
+      renderDayChart(body, key, view);
+    }
+  }
+
+  function wireViewToggle(body) {
+    if (!body) return;
+    body.querySelectorAll(".view-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var v = btn.getAttribute("data-view");
+        if (!v) return;
+        body.setAttribute("data-view", v);
+        body.querySelectorAll(".view-btn").forEach(function (b) {
+          b.setAttribute("aria-selected", b.getAttribute("data-view") === v ? "true" : "false");
+        });
+        var card = body.closest("details.stock-card");
+        if (card) syncCardBody(card);
+      });
+    });
+  }
+
+  document.addEventListener("toggle", function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains("stock-card") && t.open) {
+      syncCardBody(t);
+    }
+  }, true);
+
   function wireSort(list) {
     if (!list) return;
     var head = list.querySelector(".report-head");
@@ -464,13 +679,16 @@
       btn.addEventListener("click", function () {
         var mode = btn.getAttribute("data-sort");
         if (!mode) return;
+        list.setAttribute("data-active-detail", mode);
         activate(mode);
         sortList(list, mode);
+        list.querySelectorAll("details.stock-card[open]").forEach(syncCardBody);
       });
     });
   }
 
   document.querySelectorAll(".report-list").forEach(wireSort);
+  document.querySelectorAll("details.stock-card .card-body").forEach(wireViewToggle);
 })();
   </script>
 </body>

@@ -38,6 +38,9 @@ class ReportRow:
     lookback_15_pct: float | None
     month_20_pct: float | None
     details: list[DayDetail]
+    # 近 N 个交易日逐日数据（与列表「连涨/连跌段」无交集要求，独立展示）
+    lookback_15_details: list[DayDetail]
+    lookback_n_details: list[DayDetail]
 
 
 def _trailing_down_streak(df: pd.DataFrame) -> tuple[int, int, list[DayDetail]]:
@@ -97,9 +100,34 @@ def _month_return(closes: pd.Series, lookback: int) -> float | None:
     return (b / a - 1.0) * 100.0
 
 
+def _lookback_trading_details(df: pd.DataFrame, lookback: int) -> list[DayDetail]:
+    """
+    Last `lookback` trading days, each with close and day-to-day % vs previous row.
+    Requires len > lookback (same as _month_return needing lookback+1 points).
+    """
+    if lookback < 1:
+        return []
+    if df.empty or "close" not in df.columns:
+        return []
+    closes = pd.to_numeric(df["close"], errors="coerce")
+    dates = df["date"].astype(str).tolist()
+    n = len(closes)
+    if n <= lookback:
+        return []
+    out: list[DayDetail] = []
+    for idx in range(n - lookback, n):
+        prev = float(closes.iloc[idx - 1])
+        c = float(closes.iloc[idx])
+        day_pct = (c / prev - 1.0) * 100.0 if prev else 0.0
+        out.append(DayDetail(date=dates[idx], close=c, day_pct=day_pct))
+    return out
+
+
 def _row_to_ctx(r: ReportRow, *, streak_bg: str) -> dict[str, Any]:
     d = asdict(r)
     d["details"] = [asdict(x) for x in r.details]
+    d["lookback_15_details"] = [asdict(x) for x in r.lookback_15_details]
+    d["lookback_n_details"] = [asdict(x) for x in r.lookback_n_details]
     d["streak_bg"] = streak_bg
     d["stock_title"] = f"{r.stock_name}（{r.code}）"
     return d
@@ -177,6 +205,11 @@ def build_rows(cfg: AppConfig, mode: ReportMode) -> tuple[list[ReportRow], str]:
         streak_total = (c_last / c_anchor - 1.0) * 100.0 if c_anchor else 0.0
         lb15 = _month_return(closes, 15)
         m20 = _month_return(closes, cfg.lookback_trading_days)
+        lb15d = _lookback_trading_details(df, 15)
+        if cfg.lookback_trading_days == 15:
+            lbnd = lb15d
+        else:
+            lbnd = _lookback_trading_details(df, cfg.lookback_trading_days)
         disp_name = name_by_code.get(code, code)
         rows.append(
             ReportRow(
@@ -188,6 +221,8 @@ def build_rows(cfg: AppConfig, mode: ReportMode) -> tuple[list[ReportRow], str]:
                 lookback_15_pct=lb15,
                 month_20_pct=m20,
                 details=details,
+                lookback_15_details=lb15d,
+                lookback_n_details=lbnd,
             )
         )
 
