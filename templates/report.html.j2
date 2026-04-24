@@ -16,6 +16,7 @@
           role="listitem"
           style="--streak-tint: {{ r.streak_bg }};"
           data-streak="{{ r.streak_days }}"
+          data-stpct="{{ r.streak_total_pct }}"
           data-lb15="{% if r.lookback_15_pct is not none %}{{ r.lookback_15_pct }}{% endif %}"
           data-lbn="{% if r.month_20_pct is not none %}{{ r.month_20_pct }}{% endif %}"
         >
@@ -402,6 +403,7 @@
       {% else %}
       <div class="sort-toolbar-mobile" aria-label="看跌排序">
         <button type="button" class="sort-btn sort-active" data-sort="streak" title="按连跌天数从高到低">连跌天数</button>
+        <button type="button" class="sort-btn" data-sort="stpct" title="按连跌总跌幅从深到浅">总跌幅</button>
         <button type="button" class="sort-btn" data-sort="lb15" title="按近15日跌幅从深到浅">近15日</button>
         <button type="button" class="sort-btn" data-sort="lbn" title="按近{{ lookback_trading_days }}日跌幅从深到浅">近{{ lookback_trading_days }}日</button>
       </div>
@@ -410,7 +412,7 @@
           <span>股票（含代码）</span>
           <span class="num">最新收盘</span>
           <button type="button" class="sort-btn num sort-active" data-sort="streak" title="按连跌天数从高到低">连跌天数</button>
-          <span class="pct">连跌总跌幅</span>
+          <button type="button" class="sort-btn pct" data-sort="stpct" title="按连跌总跌幅从深到浅">连跌总跌幅</button>
           <button type="button" class="sort-btn pct" data-sort="lb15" title="按近15日跌幅从深到浅">近15日</button>
           <button type="button" class="sort-btn pct" data-sort="lbn" title="按近{{ lookback_trading_days }}日跌幅从深到浅">近{{ lookback_trading_days }}日</button>
           <span class="rh-hint">明细</span>
@@ -430,6 +432,7 @@
       {% else %}
       <div class="sort-toolbar-mobile" aria-label="看涨排序">
         <button type="button" class="sort-btn sort-active" data-sort="streak" title="按连涨天数从高到低">连涨天数</button>
+        <button type="button" class="sort-btn" data-sort="stpct" title="按连涨总涨幅从高到低">总涨幅</button>
         <button type="button" class="sort-btn" data-sort="lb15" title="按近15日涨幅从高到低">近15日</button>
         <button type="button" class="sort-btn" data-sort="lbn" title="按近{{ lookback_trading_days }}日涨幅从高到低">近{{ lookback_trading_days }}日</button>
       </div>
@@ -438,7 +441,7 @@
           <span>股票（含代码）</span>
           <span class="num">最新收盘</span>
           <button type="button" class="sort-btn num sort-active" data-sort="streak" title="按连涨天数从高到低">连涨天数</button>
-          <span class="pct">连涨总涨幅</span>
+          <button type="button" class="sort-btn pct" data-sort="stpct" title="按连涨总涨幅从高到低">连涨总涨幅</button>
           <button type="button" class="sort-btn pct" data-sort="lb15" title="按近15日涨幅从高到低">近15日</button>
           <button type="button" class="sort-btn pct" data-sort="lbn" title="按近{{ lookback_trading_days }}日涨幅从高到低">近{{ lookback_trading_days }}日</button>
           <span class="rh-hint">明细</span>
@@ -528,6 +531,9 @@
       }
       if (sortKey === "lb15") {
         return cmpPct(parsePct(x, "data-lb15"), parsePct(y, "data-lb15"));
+      }
+      if (sortKey === "stpct") {
+        return cmpPct(parsePct(x, "data-stpct"), parsePct(y, "data-stpct"));
       }
       return cmpPct(parsePct(x, "data-lbn"), parsePct(y, "data-lbn"));
     });
@@ -679,7 +685,7 @@
       btn.addEventListener("click", function () {
         var mode = btn.getAttribute("data-sort");
         if (!mode) return;
-        list.setAttribute("data-active-detail", mode);
+        list.setAttribute("data-active-detail", mode === "stpct" ? "streak" : mode);
         activate(mode);
         sortList(list, mode);
         list.querySelectorAll("details.stock-card[open]").forEach(syncCardBody);
