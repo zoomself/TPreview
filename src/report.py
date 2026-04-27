@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlencode
 
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -123,6 +124,20 @@ def _lookback_trading_details(df: pd.DataFrame, lookback: int) -> list[DayDetail
     return out
 
 
+def _em_zxfx_stock_url(r: ReportRow) -> str:
+    """东方财富 个股分析（code 为纯数字，market 为 SH/SZ/BJ 等大写市场码）。"""
+    parts = r.code.split(".", 1)
+    if len(parts) == 2:
+        mkt, num = parts[0], parts[1]
+    else:
+        mkt, num = "", r.code
+    q = urlencode(
+        {"code": num, "market": mkt.upper(), "name": r.stock_name},
+        encoding="utf-8",
+    )
+    return f"https://emrnweb.eastmoney.com/zxfxStock/home?{q}"
+
+
 def _row_to_ctx(r: ReportRow, *, streak_bg: str) -> dict[str, Any]:
     d = asdict(r)
     d["details"] = [asdict(x) for x in r.details]
@@ -130,6 +145,7 @@ def _row_to_ctx(r: ReportRow, *, streak_bg: str) -> dict[str, Any]:
     d["lookback_n_details"] = [asdict(x) for x in r.lookback_n_details]
     d["streak_bg"] = streak_bg
     d["stock_title"] = f"{r.stock_name}（{r.code}）"
+    d["em_zxfx_url"] = _em_zxfx_stock_url(r)
     return d
 
 

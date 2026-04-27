@@ -46,6 +46,7 @@
               <button type="button" class="view-btn" data-view="table" aria-selected="true" title="数据表">数据</button>
               <button type="button" class="view-btn" data-view="bar" aria-selected="false" title="柱状图">柱状</button>
               <button type="button" class="view-btn" data-view="line" aria-selected="false" title="折线图">折线</button>
+              <a class="view-btn" href="{{ r.em_zxfx_url }}" target="_blank" rel="noopener noreferrer" title="东方财富 个股分析">个股分析</a>
             </div>
             <div class="card-body-data">
               <div class="card-body-inner detail-table-wrap">
@@ -324,6 +325,14 @@
     .view-toggle .view-btn[aria-selected="true"] {
       color: var(--accent);
       border-color: var(--accent);
+    }
+    .view-toggle a.view-btn {
+      text-decoration: none;
+      display: inline-block;
+    }
+    .view-toggle .view-btn:hover:not([aria-selected="true"]) {
+      color: var(--text);
+      border-color: #3d4f66;
     }
     .detail-hint {
       margin: 0 0 0.4rem;
