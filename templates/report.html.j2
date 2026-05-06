@@ -15,6 +15,8 @@
           class="stock-card"
           role="listitem"
           style="--streak-tint: {{ r.streak_bg }};"
+          data-stock-name="{{ r.stock_name }}"
+          data-stock-code="{{ r.code }}"
           data-streak="{{ r.streak_days }}"
           data-stpct="{{ r.streak_total_pct }}"
           data-lb15="{% if r.lookback_15_pct is not none %}{{ r.lookback_15_pct }}{% endif %}"
@@ -148,11 +150,65 @@
     header {
       padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
       background: linear-gradient(180deg, #15202b 0%, var(--bg) 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .header-left {
+      flex: 1;
+      min-width: 0;
+    }
+    .header-left .mode-switch {
+      margin-bottom: 0.65rem;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .stock-search-wrap {
+      flex: 0 0 auto;
+      min-width: 12rem;
+      max-width: 100%;
+    }
+    #stock-search {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 0.88rem;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+    }
+    #stock-search::placeholder {
+      color: var(--muted);
+    }
+    #stock-search:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    details.stock-card.stock-card--hidden {
+      display: none !important;
+    }
+    .search-empty-hint {
+      margin: 0 0 0.5rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      padding: 0.35rem 0;
     }
     .mode-switch {
       display: inline-flex;
       gap: 0.25rem;
-      margin-bottom: 0.65rem;
       padding: 0.2rem;
       background: var(--panel);
       border: 1px solid var(--border);
@@ -375,6 +431,11 @@
     .sort-toolbar-mobile .sort-btn.sort-active { color: var(--accent); border-color: var(--accent); }
 
     @media (max-width: 720px) {
+      .stock-search-wrap {
+        flex: 1 1 100%;
+        min-width: 0;
+        width: 100%;
+      }
       .report-head { display: none; }
       .sort-toolbar-mobile { display: flex; }
       details.stock-card > summary {
@@ -390,12 +451,18 @@
 </head>
 <body>
   <header>
-    <div class="mode-switch" role="tablist" aria-label="看涨 / 看跌">
-      <button type="button" id="tab-bear" role="tab" aria-selected="true" aria-controls="report-pane-bear" tabindex="0">看跌</button>
-      <button type="button" id="tab-bull" role="tab" aria-selected="false" aria-controls="report-pane-bull" tabindex="-1">看涨</button>
+    <div class="header-left">
+      <div class="mode-switch" role="tablist" aria-label="看涨 / 看跌">
+        <button type="button" id="tab-bear" role="tab" aria-selected="true" aria-controls="report-pane-bear" tabindex="0">看跌</button>
+        <button type="button" id="tab-bull" role="tab" aria-selected="false" aria-controls="report-pane-bull" tabindex="-1">看涨</button>
+      </div>
+      <div class="meta global-meta">
+        生成时间：{{ generated_at }} · 配置的数据结束日：{{ data_end_date or "—" }} · 已排除 ST 类证券
+      </div>
     </div>
-    <div class="meta global-meta">
-      生成时间：{{ generated_at }} · 配置的数据结束日：{{ data_end_date or "—" }} · 已排除 ST 类证券
+    <div class="stock-search-wrap">
+      <label for="stock-search" class="sr-only">按名称或代码搜索当前列表</label>
+      <input type="search" id="stock-search" placeholder="搜索名称或代码" autocomplete="off" />
     </div>
   </header>
   <main>
@@ -428,6 +495,7 @@
         </div>
         {{ row_cards(rows_bear, "bear", lookback_trading_days) }}
       </div>
+      <p id="search-empty-bear" class="search-empty-hint" hidden aria-live="polite">当前列表中没有匹配的名称或代码。</p>
       {% endif %}
     </section>
 
@@ -457,6 +525,7 @@
         </div>
         {{ row_cards(rows_bull, "bull", lookback_trading_days) }}
       </div>
+      <p id="search-empty-bull" class="search-empty-hint" hidden aria-live="polite">当前列表中没有匹配的名称或代码。</p>
       {% endif %}
     </section>
     {% endif %}
@@ -477,6 +546,79 @@
   var tabBull = document.getElementById("tab-bull");
   if (!paneBear || !paneBull || !tabBear || !tabBull) return;
 
+  var stockSearch = document.getElementById("stock-search");
+  var searchEmptyBear = document.getElementById("search-empty-bear");
+  var searchEmptyBull = document.getElementById("search-empty-bull");
+
+  function normSearchToken(s) {
+    return String(s || "").trim().toLowerCase().replace(/\./g, "");
+  }
+
+  function activeReportList() {
+    if (!paneBear.hidden && paneBear.querySelector(".report-list")) {
+      return paneBear.querySelector(".report-list");
+    }
+    if (!paneBull.hidden && paneBull.querySelector(".report-list")) {
+      return paneBull.querySelector(".report-list");
+    }
+    return null;
+  }
+
+  function updateSearchEmptyHints(visiblePaneIsBull, queryNonEmpty, visibleCount, listPresent) {
+    if (searchEmptyBear) {
+      searchEmptyBear.hidden = true;
+    }
+    if (searchEmptyBull) {
+      searchEmptyBull.hidden = true;
+    }
+    if (!queryNonEmpty || !listPresent) return;
+    var hint = visiblePaneIsBull ? searchEmptyBull : searchEmptyBear;
+    if (hint && visibleCount === 0) {
+      hint.hidden = false;
+    }
+  }
+
+  function applyStockSearch() {
+    var q = stockSearch ? normSearchToken(stockSearch.value) : "";
+    var list = activeReportList();
+    document.querySelectorAll(".report-list").forEach(function (lst) {
+      if (!q) {
+        lst.querySelectorAll("details.stock-card").forEach(function (c) {
+          c.classList.remove("stock-card--hidden");
+        });
+        return;
+      }
+      if (lst !== list) {
+        lst.querySelectorAll("details.stock-card").forEach(function (c) {
+          c.classList.remove("stock-card--hidden");
+        });
+        return;
+      }
+      lst.querySelectorAll("details.stock-card").forEach(function (card) {
+        var nameNorm = String(card.getAttribute("data-stock-name") || "").trim().toLowerCase();
+        var codeNorm = normSearchToken(card.getAttribute("data-stock-code") || "");
+        var match = nameNorm.indexOf(q) !== -1 || codeNorm.indexOf(q) !== -1;
+        card.classList.toggle("stock-card--hidden", !match);
+      });
+    });
+
+    var visiblePaneIsBull = !paneBull.hidden;
+
+    if (!q) {
+      updateSearchEmptyHints(visiblePaneIsBull, false, 0, !!list);
+      return;
+    }
+    if (!list) {
+      updateSearchEmptyHints(visiblePaneIsBull, true, 0, false);
+      return;
+    }
+    var visibleCount = 0;
+    list.querySelectorAll("details.stock-card").forEach(function (card) {
+      if (!card.classList.contains("stock-card--hidden")) visibleCount++;
+    });
+    updateSearchEmptyHints(visiblePaneIsBull, true, visibleCount, true);
+  }
+
   function setMode(mode) {
     var bull = mode === "bull";
     paneBull.hidden = !bull;
@@ -489,6 +631,7 @@
     try {
       localStorage.setItem(STORAGE_KEY, mode);
     } catch (e) {}
+    applyStockSearch();
   }
 
   var saved = null;
@@ -505,6 +648,9 @@
 
   tabBear.addEventListener("click", function () { setMode("bear"); });
   tabBull.addEventListener("click", function () { setMode("bull"); });
+  if (stockSearch) {
+    stockSearch.addEventListener("input", applyStockSearch);
+  }
 
   function parsePct(el, key) {
     var v = el.getAttribute(key);
